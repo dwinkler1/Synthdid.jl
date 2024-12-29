@@ -1,59 +1,69 @@
 gr()
 
-function plot_outcomes(res::Dict; save::Bool = false, dir::String = "", format::String = "png")
+function plot_outcomes(res::Dict; overlay::Float64 = 0.0, save::Bool=false, dir::String="", format::String="png")
 
-  if !(format in ["png", "pdf", "ps", "svg"])
-    throw(ArgumentError("keyword argument `format` must be \"png\", \"pdf\", \"ps\", or \"svg\", got $format"))
-  end
-  
-  t_span = res["t_span"]; 
-  tyears = res["tyears"];
-  N0 = size(res["weights"]["omega"], 1)
-  plots = Dict()
-
-  for year in tyears
-    year_str = string(year);
-    T0 = res["year_params"][res["year_params"].treat_year .== year, "T0"][1];
-    T0 = Int(T0);
-
-    # get weights
-    omega_hat = res["weights"]["omega"][:, year_str];
-    lambda_hat = res["weights"]["lambda"][year_str];
-
-    # create matrices to calculate trajectory
-    Y_year = copy(res["Y"][year_str]);
-    Y_pre_c = Y_year[1:N0, 1:T0];
-    Y_post_c = Y_year[1:N0, T0 + 1:end];
-    Y_pre_t = mean(Y_year[N0 + 1:end, 1:T0], dims = 1);
-    Y_post_t = mean(Y_year[N0 + 1:end, T0 + 1:end], dims = 1);
-    Y_t = [Y_pre_t Y_post_t];
-    Y_c = [Y_pre_c Y_post_c]
-
-    # calculate synth outcome trajectory
-    n_features = size(Y_c, 1);
-    start_w = fill(1/n_features, n_features);
-    omega_hat = res["weights"]["omega"][:, year_str];
-    lambda_hat = res["weights"]["lambda"][year_str];
-    # _intercept = (start_w - omega_hat)' * Y_pre_c * lambda_hat;
-    Y_sdid_traj = omega_hat' * Y_c # .+ _intercept;
-
-    # plot parameters for scaling/offsets
-    plot_y_min = minimum([Y_sdid_traj; Y_t])
-    plot_y_max = maximum([Y_sdid_traj; Y_t])
-    plot_height = plot_y_max - plot_y_min
-
-    p = Plots.plot(t_span, Y_sdid_traj', label = "Control", ls = :dash)
-    plot!(t_span, Y_t', label = "Treatment")
-    plot!(t_span[1:T0], lambda_hat .* plot_height' / 3 .+ plot_y_min, label = "", fillrange = plot_y_min, lw = 0)
-    vline!([year], label = "")
-    xlabel!("Year")
-    title!("Adoption: " * year_str)
-    plots[year_str] = p
-    if save
-      savefig(p, "$dir/outcomes_$year_str.$format")
+    if !(format in ["png", "pdf", "ps", "svg"])
+        throw(ArgumentError("keyword argument `format` must be \"png\", \"pdf\", \"ps\", or \"svg\", got $format"))
     end
-  end
-  return plots
+
+    t_span = res["t_span"]
+    tyears = res["tyears"]
+    N0 = size(res["weights"]["omega"], 1)
+    plots = Dict()
+
+    for year in tyears
+        year_str = string(year)
+        T0 = res["year_params"][res["year_params"].treat_year.==year, "T0"][1]
+        T0 = Int(T0)
+        T1 = res["year_params"][res["year_params"].treat_year.==year, "T1"][1]
+        T1 = Int(T1)
+        N1 = res["year_params"][res["year_params"].treat_year.==year, "N1"][1]
+        N1 = Int(N1)
+        # get weights
+        omega_hat = res["weights"]["omega"][:, year_str]
+        lambda_hat = res["weights"]["lambda"][year_str]
+
+        # create matrices to calculate trajectory
+        Y_year = copy(res["Y"][year_str])
+        Y_pre_c = Y_year[1:N0, 1:T0]
+        Y_post_c = Y_year[1:N0, T0+1:end]
+        Y_pre_t = mean(Y_year[N0+1:end, 1:T0], dims=1)
+        Y_post_t = mean(Y_year[N0+1:end, T0+1:end], dims=1)
+        Y_t = [Y_pre_t Y_post_t]
+        Y_c = [Y_pre_c Y_post_c]
+        Y = Y_year
+        # calculate synth outcome trajectory
+        n_features = size(Y_c, 1)
+        start_w = fill(1 / n_features, n_features)
+        omega_hat = res["weights"]["omega"][:, year_str]
+        lambda_hat = res["weights"]["lambda"][year_str]
+        lambda_synth = vcat(lambda_hat, zeros(T1))
+
+        # Create the omega.synth and omega.target vectors
+        omega_synth = vcat(omega_hat, zeros(N1))
+        omega_target = vcat(zeros(N0), fill(1 / N1, N1))
+        
+        _intercept = overlay .* ((omega_target .- omega_synth)' * Y * lambda_synth)
+        Y_sdid_traj = omega_hat' * Y_c  .+ _intercept;
+
+
+        # plot parameters for scaling/offsets
+        plot_y_min = minimum([Y_sdid_traj; Y_t])
+        plot_y_max = maximum([Y_sdid_traj; Y_t])
+        plot_height = plot_y_max - plot_y_min
+
+        p = Plots.plot(t_span, Y_sdid_traj', label="Control", ls=:dash)
+        plot!(t_span, Y_t', label="Treatment")
+        plot!(t_span[1:T0], lambda_hat .* plot_height' / 3 .+ plot_y_min, label="", fillrange=plot_y_min, lw=0)
+        vline!([year], label="")
+        xlabel!("Year")
+        title!("Adoption: " * year_str)
+        plots[year_str] = p
+        if save
+            savefig(p, "$dir/outcomes_$year_str.$format")
+        end
+    end
+    return plots
 end
 
 function plot_outcomes(
