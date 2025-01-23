@@ -52,7 +52,7 @@ function plot_outcomes(res::Dict; overlay::Float64 = 0.0, save::Bool=false, dir:
         plot_y_max = maximum([Y_sdid_traj; Y_t])
         plot_height = plot_y_max - plot_y_min
 
-        p = Plots.plot(t_span, Y_sdid_traj', label="Control", ls=:dash)
+        p = Plots.plot(t_span, Y_sdid_traj', label="Control", ls=:dash, legend = :outertopright)
         plot!(t_span, Y_t', label="Treatment")
         plot!(t_span[1:T0], lambda_hat .* plot_height' / 3 .+ plot_y_min, label="", fillrange=plot_y_min, lw=0)
         vline!([year], label="")
